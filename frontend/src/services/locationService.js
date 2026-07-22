@@ -1,57 +1,11 @@
 import { DEFAULT_CENTER } from '../constants';
 
 /**
- * Empty functions to replace Google Maps initialization.
- */
-export async function loadGoogleMaps() {
-  return {};
-}
-
-/**
- * Mock PlacesService.
- */
-export function createPlacesService(map) {
-  return {};
-}
-
-/**
- * Mock Autocomplete functionality using Nominatim API.
- */
-export function createAutocomplete(inputElement, options = {}) {
-  // We can't directly override Google's complex DOM mutation here perfectly easily
-  // without redesigning the search component to use a different dropdown.
-  // Instead, we just stub it so it doesn't crash.
-  let listenerCallback = null;
-
-  return {
-    addListener: (event, callback) => {
-      if (event === 'place_changed') {
-        listenerCallback = callback;
-      }
-    },
-    getPlace: () => {
-      // Return a mocked place that geocodes the current input value roughly
-      const val = inputElement.value;
-      return {
-        name: val,
-        formatted_address: val,
-        geometry: {
-          location: {
-            lat: () => DEFAULT_CENTER.lat,
-            lng: () => DEFAULT_CENTER.lng,
-          }
-        }
-      };
-    }
-  };
-}
-
-/**
  * Search nearby places using Nominatim.
  */
-export async function nearbySearch(service, request) {
-  const lat = typeof request.location?.lat === 'function' ? request.location.lat() : request.location?.lat || DEFAULT_CENTER.lat;
-  const lon = typeof request.location?.lng === 'function' ? request.location.lng() : request.location?.lng || DEFAULT_CENTER.lng;
+export async function nearbySearch(request) {
+  const lat = request.location?.lat || DEFAULT_CENTER.lat;
+  const lon = request.location?.lng || DEFAULT_CENTER.lng;
 
   try {
     const q = request.type ? request.type : 'attractions';
@@ -67,7 +21,7 @@ export async function nearbySearch(service, request) {
 /**
  * Text search for places using Nominatim.
  */
-export async function textSearch(service, request) {
+export async function textSearch(request) {
   try {
     const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(request.query)}&format=json&limit=20`);
     const data = await res.json();
@@ -87,8 +41,8 @@ export async function geocodeAddress(address) {
     const data = await res.json();
     if (data && data.length > 0) {
       return {
-        lat: () => parseFloat(data[0].lat),
-        lng: () => parseFloat(data[0].lon)
+        lat: parseFloat(data[0].lat),
+        lng: parseFloat(data[0].lon)
       };
     }
     throw new Error('No results found');
@@ -98,9 +52,28 @@ export async function geocodeAddress(address) {
 }
 
 /**
+ * Search places for autocomplete using Nominatim.
+ */
+export async function autocompleteOptions(query) {
+  if (!query) return [];
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`);
+    const data = await res.json();
+    return data.map(item => ({
+      name: item.display_name,
+      lat: parseFloat(item.lat),
+      lng: parseFloat(item.lon)
+    }));
+  } catch (err) {
+    console.error('Autocomplete failed:', err);
+    return [];
+  }
+}
+
+/**
  * Get place details.
  */
-export async function getPlaceDetails(service, placeId) {
+export async function getPlaceDetails(placeId) {
   try {
     const res = await fetch(`https://nominatim.openstreetmap.org/lookup?osm_ids=${placeId}&format=json`);
     const data = await res.json();
@@ -112,8 +85,8 @@ export async function getPlaceDetails(service, placeId) {
         formatted_address: item.display_name,
         geometry: {
           location: {
-            lat: () => parseFloat(item.lat),
-            lng: () => parseFloat(item.lon)
+            lat: parseFloat(item.lat),
+            lng: parseFloat(item.lon)
           }
         },
         rating: 4.0, // Mock rating
@@ -137,7 +110,7 @@ export async function getDirections(origin, destination, travelMode = 'DRIVING')
 }
 
 /**
- * Format Nominatim results to match Google Places shape.
+ * Format Nominatim results to match Google Places shape, but simplified.
  */
 function formatNominatimResults(data) {
   return data.map(item => ({
@@ -147,10 +120,8 @@ function formatNominatimResults(data) {
     vicinity: item.display_name,
     geometry: {
       location: {
-        lat: () => parseFloat(item.lat),
-        lng: () => parseFloat(item.lon),
-        lat_val: parseFloat(item.lat), // Fallback
-        lng_val: parseFloat(item.lon)
+        lat: parseFloat(item.lat),
+        lng: parseFloat(item.lon)
       }
     },
     rating: (Math.random() * 2 + 3).toFixed(1), // Mock rating since OSM doesn't have it natively
@@ -158,12 +129,3 @@ function formatNominatimResults(data) {
     photos: []
   }));
 }
-
-// Fallback for missing window.google inside other files during transition
-window.google = {
-  maps: {
-    LatLng: function (lat, lng) {
-      return { lat: () => lat, lng: () => lng, lat_val: lat, lng_val: lng };
-    }
-  }
-};

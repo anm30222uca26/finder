@@ -4,15 +4,12 @@ import { useGeolocation } from '../hooks/useGeolocation';
 import { useAuth } from '../context/AuthContext';
 import { PLACE_CATEGORIES, DEFAULT_CENTER } from '../constants';
 import {
-  loadGoogleMaps,
-  createPlacesService,
-  createAutocomplete,
   nearbySearch,
   textSearch,
   getPlaceDetails,
   getDirections,
   geocodeAddress,
-} from '../services/googleMaps';
+} from '../services/locationService';
 import { favoritesAPI, historyAPI } from '../services/api';
 import { getDistanceMeters, getPhotoUrl } from '../utils/helpers';
 import MapView from '../components/MapView';
@@ -56,8 +53,6 @@ export default function HomePage() {
   const [favoriteLoading, setFavoriteLoading] = useState(false);
 
   const locationInputRef = useRef(null);
-  const placesServiceRef = useRef(null);
-  const mapRef = useRef(null);
 
   // Handle navigation from favorites/history pages
   useEffect(() => {
@@ -84,41 +79,7 @@ export default function HomePage() {
     }
   }, [userLocation, searchCenter]);
 
-  // Setup Google Places Autocomplete
-  useEffect(() => {
-    let autocomplete = null;
 
-    async function setupAutocomplete() {
-      await loadGoogleMaps();
-      if (locationInputRef.current) {
-        autocomplete = createAutocomplete(locationInputRef.current, {
-          types: ['geocode'],
-        });
-        autocomplete.addListener('place_changed', () => {
-          const place = autocomplete.getPlace();
-          if (place.geometry?.location) {
-            const loc = {
-              lat: place.geometry.location.lat(),
-              lng: place.geometry.location.lng(),
-            };
-            setSearchCenter(loc);
-            setMapCenter(loc);
-            setLocationText(place.formatted_address || place.name || '');
-          }
-        });
-      }
-    }
-
-    setupAutocomplete();
-    return () => {
-      if (autocomplete) window.google?.maps?.event?.clearInstanceListeners(autocomplete);
-    };
-  }, []);
-
-  const onMapReady = useCallback((map) => {
-    mapRef.current = map;
-    placesServiceRef.current = createPlacesService(map);
-  }, []);
 
   // Apply client-side filters
   useEffect(() => {
@@ -139,8 +100,8 @@ export default function HomePage() {
         const dist = getDistanceMeters(
           center.lat,
           center.lng,
-          p.geometry.location.lat(),
-          p.geometry.location.lng()
+          p.geometry.location.lat,
+          p.geometry.location.lng
         );
         return dist <= filters.distance;
       });
@@ -158,13 +119,6 @@ export default function HomePage() {
     setDirectionsInfo(null);
 
     try {
-      await loadGoogleMaps();
-      if (!placesServiceRef.current && mapRef.current) {
-        placesServiceRef.current = createPlacesService(mapRef.current);
-      }
-      if (!placesServiceRef.current) {
-        throw new Error('Map not ready. Please wait and try again.');
-      }
 
       let center = searchCenter || userLocation || DEFAULT_CENTER;
 
@@ -189,24 +143,24 @@ export default function HomePage() {
           ? `${keyword} in ${locationText}`
           : `${keyword} near me`;
 
-        results = await textSearch(placesServiceRef.current, {
+        results = await textSearch({
           query,
-          location: new window.google.maps.LatLng(center.lat, center.lng),
+          location: center,
           radius: filters.distance,
           openNow: filters.openNow || undefined,
         });
       } else if (category && category.type) {
         // Nearby search by category type
-        results = await nearbySearch(placesServiceRef.current, {
-          location: new window.google.maps.LatLng(center.lat, center.lng),
+        results = await nearbySearch({
+          location: center,
           radius: filters.distance,
           type: category.type,
           openNow: filters.openNow || undefined,
         });
       } else {
         // General nearby search
-        results = await nearbySearch(placesServiceRef.current, {
-          location: new window.google.maps.LatLng(center.lat, center.lng),
+        results = await nearbySearch({
+          location: center,
           radius: filters.distance,
           openNow: filters.openNow || undefined,
         });
@@ -245,7 +199,7 @@ export default function HomePage() {
     setError('');
 
     try {
-      const details = await getPlaceDetails(placesServiceRef.current, place.place_id);
+      const details = await getPlaceDetails(place.place_id);
       setSelectedDetails(details);
 
       if (isAuthenticated) {
@@ -269,8 +223,8 @@ export default function HomePage() {
     try {
       const origin = userLocation;
       const dest = {
-        lat: selectedDetails.geometry.location.lat(),
-        lng: selectedDetails.geometry.location.lng(),
+        lat: selectedDetails.geometry.location.lat,
+        lng: selectedDetails.geometry.location.lng,
       };
 
       const result = await getDirections(origin, dest);
@@ -308,8 +262,8 @@ export default function HomePage() {
           address: selectedDetails.formatted_address || selectedDetails.vicinity,
           rating: selectedDetails.rating || 0,
           photoUrl,
-          lat: selectedDetails.geometry.location.lat(),
-          lng: selectedDetails.geometry.location.lng(),
+          lat: selectedDetails.geometry.location.lat,
+          lng: selectedDetails.geometry.location.lng,
           types: selectedDetails.types || [],
         });
         setIsFavorite(true);
