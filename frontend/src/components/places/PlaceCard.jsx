@@ -1,21 +1,19 @@
 import { Star, MapPin } from 'lucide-react';
-import { GOOGLE_MAPS_API_KEY } from '../../constants';
 import { getPhotoUrl, getDistanceMeters, formatDistance } from '../../utils/helpers';
 
 export default function PlaceCard({ place, userLocation, isSelected, onClick }) {
-  const photoUrl =
-    place.photos?.length > 0 ? getPhotoUrl(place.photos[0], GOOGLE_MAPS_API_KEY, 200) : null;
+  const photoUrl = place.photos?.length > 0 ? getPhotoUrl(place.photos[0], 200) : null;
 
   const distance =
     userLocation && place.geometry?.location
       ? formatDistance(
-          getDistanceMeters(
-            userLocation.lat,
-            userLocation.lng,
-            place.geometry.location.lat(),
-            place.geometry.location.lng()
-          )
+        getDistanceMeters(
+          userLocation.lat,
+          userLocation.lng,
+          place.geometry.location.lat(),
+          place.geometry.location.lng()
         )
+      )
       : null;
 
   return (

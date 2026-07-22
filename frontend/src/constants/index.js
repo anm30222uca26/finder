@@ -1,6 +1,4 @@
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-export const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
-
 export const PLACE_CATEGORIES = [
   { value: 'all', label: 'All Places' },
   { value: 'hospital', label: 'Hospitals', type: 'hospital' },

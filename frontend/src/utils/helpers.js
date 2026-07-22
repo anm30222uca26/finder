@@ -8,8 +8,8 @@ export function getDistanceMeters(lat1, lng1, lat2, lng2) {
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
@@ -33,15 +33,13 @@ export function formatDuration(seconds) {
 }
 
 /**
- * Get photo URL from Google Places photo reference.
+ * Get photo URL from place item.
  */
-export function getPhotoUrl(photo, apiKey, maxWidth = 400) {
-  if (!photo || !apiKey) return '';
+export function getPhotoUrl(photo, maxWidth = 400) {
+  if (!photo) return '';
+  if (typeof photo === 'string') return photo; // URL
   if (typeof photo.getUrl === 'function') {
     return photo.getUrl({ maxWidth });
-  }
-  if (photo.photo_reference) {
-    return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxWidth}&photo_reference=${photo.photo_reference}&key=${apiKey}`;
   }
   return '';
 }

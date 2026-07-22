@@ -15,8 +15,7 @@ import {
 } from '../services/googleMaps';
 import { favoritesAPI, historyAPI } from '../services/api';
 import { getDistanceMeters, getPhotoUrl } from '../utils/helpers';
-import { GOOGLE_MAPS_API_KEY } from '../constants';
-import GoogleMap from '../components/map/GoogleMap';
+import MapView from '../components/MapView';
 import SearchBar from '../components/search/SearchBar';
 import SearchFilters from '../components/search/SearchFilters';
 import PlaceCard from '../components/places/PlaceCard';
@@ -300,7 +299,7 @@ export default function HomePage() {
       } else {
         const photoUrl =
           selectedDetails.photos?.length > 0
-            ? getPhotoUrl(selectedDetails.photos[0], GOOGLE_MAPS_API_KEY)
+            ? getPhotoUrl(selectedDetails.photos[0])
             : '';
 
         await favoritesAPI.add({
@@ -390,14 +389,13 @@ export default function HomePage() {
       </aside>
 
       <section className="map-section">
-        <GoogleMap
+        <MapView
           center={mapCenter}
+          zoom={13}
           places={filteredPlaces}
           selectedPlace={selectedPlace}
           userLocation={userLocation}
-          directionsResult={directionsResult}
           onPlaceClick={handlePlaceClick}
-          onMapReady={onMapReady}
         />
 
         {(selectedDetails || detailsLoading) && (

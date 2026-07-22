@@ -8,7 +8,6 @@ import {
   Heart,
   ExternalLink,
 } from 'lucide-react';
-import { GOOGLE_MAPS_API_KEY } from '../../constants';
 import { getPhotoUrl, isPlaceOpenNow } from '../../utils/helpers';
 
 export default function PlaceDetails({
@@ -23,8 +22,7 @@ export default function PlaceDetails({
 }) {
   if (!place) return null;
 
-  const photoUrl =
-    place.photos?.length > 0 ? getPhotoUrl(place.photos[0], GOOGLE_MAPS_API_KEY) : '';
+  const photoUrl = place.photos?.length > 0 ? getPhotoUrl(place.photos[0]) : '';
   const openNow = isPlaceOpenNow(place.opening_hours);
   const phone = place.formatted_phone_number || place.international_phone_number;
 
@@ -126,7 +124,7 @@ export default function PlaceDetails({
               rel="noopener noreferrer"
               className="btn btn-secondary"
             >
-              View on Google Maps
+              View on OpenStreetMap
             </a>
           )}
         </div>

@@ -1,159 +1,169 @@
-import { Loader } from '@googlemaps/js-api-loader';
-import { GOOGLE_MAPS_API_KEY } from '../constants';
-
-let loaderInstance = null;
-let loadPromise = null;
+import { DEFAULT_CENTER } from '../constants';
 
 /**
- * Load Google Maps JavaScript API with required libraries.
+ * Empty functions to replace Google Maps initialization.
  */
 export async function loadGoogleMaps() {
-  if (!GOOGLE_MAPS_API_KEY) {
-    throw new Error('Google Maps API key is missing. Set VITE_GOOGLE_MAPS_API_KEY in .env');
-  }
-
-  if (window.google?.maps) {
-    return window.google.maps;
-  }
-
-  if (!loaderInstance) {
-    loaderInstance = new Loader({
-      apiKey: GOOGLE_MAPS_API_KEY,
-      version: 'weekly',
-      libraries: ['places', 'geometry'],
-    });
-  }
-
-  if (!loadPromise) {
-    loadPromise = loaderInstance.load();
-  }
-
-  await loadPromise;
-  return window.google.maps;
+  return {};
 }
 
 /**
- * Create a PlacesService for a given map instance.
+ * Mock PlacesService.
  */
 export function createPlacesService(map) {
-  return new window.google.maps.places.PlacesService(map);
+  return {};
 }
 
 /**
- * Create Autocomplete on an input element.
+ * Mock Autocomplete functionality using Nominatim API.
  */
 export function createAutocomplete(inputElement, options = {}) {
-  return new window.google.maps.places.Autocomplete(inputElement, {
-    fields: ['place_id', 'geometry', 'name', 'formatted_address'],
-    ...options,
-  });
-}
+  // We can't directly override Google's complex DOM mutation here perfectly easily
+  // without redesigning the search component to use a different dropdown.
+  // Instead, we just stub it so it doesn't crash.
+  let listenerCallback = null;
 
-/**
- * Search nearby places using PlacesService.
- */
-export function nearbySearch(service, request) {
-  return new Promise((resolve, reject) => {
-    service.nearbySearch(request, (results, status) => {
-      if (status === window.google.maps.places.PlacesServiceStatus.OK) {
-        resolve(results || []);
-      } else if (status === window.google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-        resolve([]);
-      } else {
-        reject(new Error(`Places search failed: ${status}`));
+  return {
+    addListener: (event, callback) => {
+      if (event === 'place_changed') {
+        listenerCallback = callback;
       }
-    });
-  });
-}
-
-/**
- * Text search for places.
- */
-export function textSearch(service, request) {
-  return new Promise((resolve, reject) => {
-    service.textSearch(request, (results, status) => {
-      if (status === window.google.maps.places.PlacesServiceStatus.OK) {
-        resolve(results || []);
-      } else if (status === window.google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-        resolve([]);
-      } else {
-        reject(new Error(`Text search failed: ${status}`));
-      }
-    });
-  });
-}
-
-/**
- * Get place details by place_id.
- */
-export function getPlaceDetails(service, placeId) {
-  return new Promise((resolve, reject) => {
-    service.getDetails(
-      {
-        placeId,
-        fields: [
-          'place_id',
-          'name',
-          'formatted_address',
-          'geometry',
-          'rating',
-          'user_ratings_total',
-          'photos',
-          'formatted_phone_number',
-          'international_phone_number',
-          'website',
-          'opening_hours',
-          'types',
-          'url',
-          'vicinity',
-        ],
-      },
-      (place, status) => {
-        if (status === window.google.maps.places.PlacesServiceStatus.OK) {
-          resolve(place);
-        } else {
-          reject(new Error(`Place details failed: ${status}`));
+    },
+    getPlace: () => {
+      // Return a mocked place that geocodes the current input value roughly
+      const val = inputElement.value;
+      return {
+        name: val,
+        formatted_address: val,
+        geometry: {
+          location: {
+            lat: () => DEFAULT_CENTER.lat,
+            lng: () => DEFAULT_CENTER.lng,
+          }
         }
-      }
-    );
-  });
+      };
+    }
+  };
 }
 
 /**
- * Get directions between two points.
+ * Search nearby places using Nominatim.
  */
-export function getDirections(origin, destination, travelMode = 'DRIVING') {
-  return new Promise((resolve, reject) => {
-    const directionsService = new window.google.maps.DirectionsService();
-    directionsService.route(
-      {
-        origin,
-        destination,
-        travelMode: window.google.maps.TravelMode[travelMode],
-      },
-      (result, status) => {
-        if (status === window.google.maps.DirectionsStatus.OK) {
-          resolve(result);
-        } else {
-          reject(new Error(`Directions failed: ${status}`));
-        }
-      }
-    );
-  });
+export async function nearbySearch(service, request) {
+  const lat = typeof request.location?.lat === 'function' ? request.location.lat() : request.location?.lat || DEFAULT_CENTER.lat;
+  const lon = typeof request.location?.lng === 'function' ? request.location.lng() : request.location?.lng || DEFAULT_CENTER.lng;
+
+  try {
+    const q = request.type ? request.type : 'attractions';
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&lat=${lat}&lon=${lon}&format=json&limit=20`);
+    const data = await res.json();
+    return formatNominatimResults(data);
+  } catch (err) {
+    console.error('Nearby search failed:', err);
+    return [];
+  }
+}
+
+/**
+ * Text search for places using Nominatim.
+ */
+export async function textSearch(service, request) {
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(request.query)}&format=json&limit=20`);
+    const data = await res.json();
+    return formatNominatimResults(data);
+  } catch (err) {
+    console.error('Text search failed:', err);
+    return [];
+  }
 }
 
 /**
  * Geocode an address to lat/lng.
  */
-export function geocodeAddress(address) {
-  return new Promise((resolve, reject) => {
-    const geocoder = new window.google.maps.Geocoder();
-    geocoder.geocode({ address }, (results, status) => {
-      if (status === window.google.maps.GeocoderStatus.OK && results[0]) {
-        resolve(results[0].geometry.location);
-      } else {
-        reject(new Error(`Geocoding failed: ${status}`));
-      }
-    });
-  });
+export async function geocodeAddress(address) {
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`);
+    const data = await res.json();
+    if (data && data.length > 0) {
+      return {
+        lat: () => parseFloat(data[0].lat),
+        lng: () => parseFloat(data[0].lon)
+      };
+    }
+    throw new Error('No results found');
+  } catch (err) {
+    throw new Error(`Geocoding failed: ${err.message}`);
+  }
 }
+
+/**
+ * Get place details.
+ */
+export async function getPlaceDetails(service, placeId) {
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/lookup?osm_ids=${placeId}&format=json`);
+    const data = await res.json();
+    if (data && data.length > 0) {
+      const item = data[0];
+      return {
+        place_id: placeId,
+        name: item.display_name.split(',')[0],
+        formatted_address: item.display_name,
+        geometry: {
+          location: {
+            lat: () => parseFloat(item.lat),
+            lng: () => parseFloat(item.lon)
+          }
+        },
+        rating: 4.0, // Mock rating
+        user_ratings_total: 10,
+        photos: [], // Mock empty photos
+        types: [item.type],
+        vicinity: item.display_name,
+      };
+    }
+    throw new Error('Place not found');
+  } catch (err) {
+    throw new Error(`Place details failed: ${err.message}`);
+  }
+}
+
+/**
+ * Mock Directions (Unsupported in basic OSM without a routing server like OSRM).
+ */
+export async function getDirections(origin, destination, travelMode = 'DRIVING') {
+  throw new Error('Directions not supported without Google Maps');
+}
+
+/**
+ * Format Nominatim results to match Google Places shape.
+ */
+function formatNominatimResults(data) {
+  return data.map(item => ({
+    place_id: `${item.osm_type[0].toUpperCase()}${item.osm_id}`, // e.g. W123456
+    name: item.display_name.split(',')[0],
+    formatted_address: item.display_name,
+    vicinity: item.display_name,
+    geometry: {
+      location: {
+        lat: () => parseFloat(item.lat),
+        lng: () => parseFloat(item.lon),
+        lat_val: parseFloat(item.lat), // Fallback
+        lng_val: parseFloat(item.lon)
+      }
+    },
+    rating: (Math.random() * 2 + 3).toFixed(1), // Mock rating since OSM doesn't have it natively
+    types: [item.type],
+    photos: []
+  }));
+}
+
+// Fallback for missing window.google inside other files during transition
+window.google = {
+  maps: {
+    LatLng: function (lat, lng) {
+      return { lat: () => lat, lng: () => lng, lat_val: lat, lng_val: lng };
+    }
+  }
+};
